@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kestrel Ridge Run — Island Flight</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1620;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #eef4f8; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  .panel { position: fixed; background: rgba(8, 20, 30, 0.62); border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  .panel .label { font-size: 10px; letter-spacing: 0.14em; opacity: 0.75; }
+  .panel .value { font-size: 22px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  #hud-tl { top: 14px; left: 14px; display: flex; gap: 18px; }
+  #hud-tr { top: 14px; right: 14px; text-align: right; display: flex; gap: 18px; }
+  #hud-compass { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 13px; letter-spacing: 0.2em; padding: 6px 14px; }
+  #hud-compass span { display: inline-block; width: 36px; text-align: center; }
+  #hud-bl { bottom: 16px; left: 14px; width: 210px; }
+  .bar { height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px; margin: 3px 0 8px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 5px; }
+  #hud-thr { background: #ffb020; width: 55%; }
+  #hud-fuel { background: #3c6; width: 100%; }
+  #hud-msg { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    font-size: 17px; font-weight: 600; text-shadow: 0 1px 4px #000; white-space: nowrap; }
+  #nav-arrow { position: fixed; font-size: 34px; color: #ffb020; text-shadow: 0 0 8px #000;
+    pointer-events: none; display: none; }
+  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(5, 12, 20, 0.55); }
+  .overlay.hidden { display: none; }
+  .card { background: rgba(8, 22, 34, 0.92); border: 1px solid rgba(255,255,255,0.25); border-radius: 16px;
+    padding: 28px 36px; max-width: 560px; text-align: center; }
+  .card h1 { margin: 0 0 6px; font-size: 40px; letter-spacing: 0.02em; }
+  .card h2 { margin: 0 0 10px; font-size: 32px; }
+  .card p { margin: 8px 0; font-size: 15px; line-height: 1.5; opacity: 0.92; }
+  .card .controls { font-size: 14px; text-align: left; display: inline-block; }
+  .card button { margin-top: 16px; font-size: 18px; font-weight: 700; padding: 12px 30px;
+    border: 0; border-radius: 10px; background: #ffb020; color: #201400; cursor: pointer; }
+  .card button:hover { background: #ffc44d; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Kestrel Ridge Run: fly the prop plane through eight rings over the island, then land on the runway"></canvas>
+
+<div id="hud-tl" class="panel">
+  <div><div class="label">ALTITUDE</div><div class="value" id="hud-alt">0 m</div></div>
+  <div><div class="label">SPEED</div><div class="value" id="hud-spd">0 km/h</div></div>
+  <div><div class="label">HEADING</div><div class="value" id="hud-hdg">000°</div></div>
+</div>
+<div id="hud-compass" class="panel"></div>
+<div id="hud-tr" class="panel">
+  <div><div class="label">SCORE</div><div class="value" id="hud-score">0</div></div>
+  <div><div class="label">RINGS</div><div class="value" id="hud-rings">0/8</div></div>
+  <div><div class="label">TIME</div><div class="value" id="hud-time">00:00</div></div>
+</div>
+<div id="hud-bl" class="panel">
+  <div class="label">THROTTLE — Shift / Ctrl, mouse wheel</div>
+  <div class="bar"><div id="hud-thr"></div></div>
+  <div class="label">FUEL</div>
+  <div class="bar"><div id="hud-fuel"></div></div>
+</div>
+<div id="hud-msg"></div>
+<div id="nav-arrow">➤</div>
+
+<div id="overlay-start" class="overlay">
+  <div class="card">
+    <h1>Kestrel Ridge Run</h1>
+    <p>A little red prop plane, one island, eight gold rings, and a runway
+    waiting at the end. Fly the course, mind your fuel, and bring her home.</p>
+    <p class="controls">
+      <b>W / S</b> or <b>↑ / ↓</b> — pitch &nbsp;·&nbsp; <b>A / D</b> or <b>← / →</b> — bank &amp; turn<br>
+      <b>Shift</b> throttle up &nbsp;·&nbsp; <b>Ctrl</b> throttle down &nbsp;·&nbsp; mouse steers, wheel = throttle<br>
+      <b>P</b> pause &nbsp;·&nbsp; <b>M</b> sound &nbsp;·&nbsp; <b>R</b> restart after a crash or landing
+    </p>
+    <p>Fly through all 8 rings to earn fuel and points, then land gently on
+    the runway. Hit the ground, stall, or run dry — and the sortie is over.</p>
+    <button id="start-btn" type="button">Take off</button>
+  </div>
+</div>
+
+<div id="overlay-end" class="overlay hidden">
+  <div class="card">
+    <h2 id="end-title">Mission Complete!</h2>
+    <p id="end-stats"></p>
+    <button id="again-btn" type="button">Fly again</button>
+  </div>
+</div>
+
+<p id="status" role="status" aria-live="polite"></p>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
